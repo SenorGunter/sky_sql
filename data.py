@@ -2,6 +2,11 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
 QUERY_FLIGHT_BY_ID = "SELECT flights.*, airlines.airline, flights.ID as FLIGHT_ID, flights.DEPARTURE_DELAY as DELAY FROM flights JOIN airlines ON flights.airline = airlines.id WHERE flights.ID = :id"
+QUERY_FLIGHT_BY_DATE = "SELECT f.id, f.ORIGIN_AIRPORT, f.DESTINATION_AIRPORT, a.AIRLINE, f.DEPARTURE_DELAY AS DELAY FROM airlines AS a JOIN flights AS f ON	a.ID = f.AIRLINE WHERE COALESCE(f.DEPARTURE_DELAY, 0) AND f.DAY = :day AND f.MONTH = :month AND f.YEAR = :year AND f.DEPARTURE_DELAY >= 20 ORDER BY DEPARTURE_DELAY DESC"
+QUERY_FLIGHT_BY_AIRLINE = "SELECT f.id, f.ORIGIN_AIRPORT, f.DESTINATION_AIRPORT, a.AIRLINE, f.DEPARTURE_DELAY AS DELAY FROM airlines AS a JOIN flights AS f ON a.ID = f.AIRLINE WHERE COALESCE(f.DEPARTURE_DELAY, 0) AND f.DEPARTURE_DELAY >= 20 AND lower(a.AIRLINE) LIKE lower(:airline) ORDER BY DEPARTURE_DELAY DESC"
+QUERY_FLIGHT_BY_ORIGIN_AIRPORT = "SELECT f.id, f.ORIGIN_AIRPORT, f.DESTINATION_AIRPORT, a.AIRLINE, f.DEPARTURE_DELAY AS DELAY FROM airlines AS a JOIN flights AS f ON a.ID = f.AIRLINE WHERE COALESCE(f.DEPARTURE_DELAY, 0) AND f.DEPARTURE_DELAY >= 20 AND f.ORIGIN_AIRPORT = :origin_airport ORDER BY DEPARTURE_DELAY DESC"
+QUERY_AVG_PERCENTAGE_DELAYED_FLIGHTS = "SELECT ORIGIN_AIRPORT, DESTINATION_AIRPORT, AVG(DELAYED_FLIGHTS * 100.0 / TOTAL_FLIGHTS) AS PERCENT_DELAYED FROM ( SELECT ORIGIN_AIRPORT, DESTINATION_AIRPORT, COUNT(CASE WHEN DEPARTURE_DELAY >= 20 THEN 0 END) AS DELAYED_FLIGHTS, COUNT(*) AS TOTAL_FLIGHTS FROM flights GROUP BY ORIGIN_AIRPORT, DESTINATION_AIRPORT ) AS ROUTE_STATS WHERE (ORIGIN_AIRPORT = :origin AND DESTINATION_AIRPORT = :destination) OR (ORIGIN_AIRPORT = :origin_vv AND DESTINATION_AIRPORT = :destination_vv) GROUP BY ORIGIN_AIRPORT, DESTINATION_AIRPORT"
+QUERY_LONG_LAT = "SELECT IATA_CODE, LATITUDE, LONGITUDE FROM airports WHERE IATA_CODE = :origin OR IATA_CODE = :destination"
 
 
 class FlightData:
@@ -43,6 +48,18 @@ class FlightData:
         """
         params = {'id': flight_id}
         return self._execute_query(QUERY_FLIGHT_BY_ID, params)
+
+    def get_flights_by_date(self, day, month, year):
+        params = {'day': day, 'month': month, 'year': year}
+        return self._execute_query(QUERY_FLIGHT_BY_DATE, params)
+
+    def get_delayed_flights_by_airline(self, airline: str):
+        params = {'airline': "%" + airline + "%"}
+        return self._execute_query(QUERY_FLIGHT_BY_AIRLINE, params)
+
+    def get_delayed_flights_by_airport(self, airport_input: str):
+        params = {'origin_airport': airport_input}
+        return self._execute_query(QUERY_FLIGHT_BY_ORIGIN_AIRPORT, params)
 
     def __del__(self):
         """
